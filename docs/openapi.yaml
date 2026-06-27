@@ -1,0 +1,334 @@
+openapi: 3.0.3
+info:
+  title: Logistics Platform API
+  description: API Gateway unificada para la plataforma políglota de logística (Auth, Shipments y Analytics).
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: API Gateway Local
+
+paths:
+  # ==========================================
+  # AUTH CONTEXT (C# / .NET)
+  # ==========================================
+  /auth/login:
+    post:
+      summary: Autenticar usuario
+      description: Valida credenciales y emite un Access Token (JWT) de corta vida junto a un Refresh Token.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: dispatcher@logistica.com
+                password:
+                  type: string
+                  format: password
+                  example: Password123!
+      responses:
+        "200":
+          description: Autenticación exitosa. Tokens emitidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        "401":
+          description: Credenciales inválidas.
+
+  /auth/refresh:
+    post:
+      summary: Rotar Refresh Token
+      description: Invalida el viejo Refresh Token y genera un par nuevo (Access + Refresh Token).
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: "d3b07384d113edec49eaa6238ad5ff00"
+      responses:
+        "200":
+          description: Token rotado con éxito.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        "401":
+          description: Refresh Token inválido o revocado.
+
+  /auth/logout:
+    post:
+      summary: Cerrar sesión
+      description: Invalida de forma activa el Refresh Token actual e introduce el ID del JWT en la lista de revocación (Blacklist).
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: "d3b07384d113edec49eaa6238ad5ff00"
+      responses:
+        "204":
+          description: Sesión cerrada e invalidada correctamente.
+        "401":
+          description: No autorizado.
+
+  # ==========================================
+  # SHIPMENT CONTEXT (Scala / Play Framework)
+  # ==========================================
+  /shipments:
+    post:
+      summary: Crear un nuevo envío
+      description: Registra un paquete en estado CREADO. Requiere rol ADMIN o DISPATCHER.
+      tags:
+        - Shipments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShipmentRequest'
+      responses:
+        "201":
+          description: Envío registrado y evento de dominio publicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentResponse'
+        "400":
+          description: Datos de envío inválidos.
+        "401":
+          description: No autorizado.
+
+  /shipments/{id}/status:
+    put:
+      summary: Actualizar estado del envío
+      description: Transiciona el envío en la máquina de estados. Los Drivers pueden transicionar a EN_TRANSITO o ENTREGADO.
+      tags:
+        - Shipments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID del envío
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [ASIGNADO, EN_TRANSITO, ENTREGADO, CANCELADO]
+                  example: EN_TRANSITO
+                driverId:
+                  type: string
+                  format: uuid
+                  description: Requerido si el estado pasa a ASIGNADO.
+                  example: "8f5a12cd-7111-4b10-86b6-b530d959567e"
+                reason:
+                  type: string
+                  description: Motivo obligatorio si el estado es CANCELADO.
+                  example: "Cliente rechazó el paquete por daño externo."
+      responses:
+        "200":
+          description: Estado actualizado e historial de auditoría generado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentResponse'
+        "422":
+          description: Error de negocio (Transición de estado inválida).
+
+  /shipments/{id}/address:
+    put:
+      summary: Modificar dirección de destino
+      description: Permite cambiar el destino si el envío sigue en estado CREADO o ASIGNADO.
+      tags:
+        - Shipments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        "200":
+          description: Dirección modificada exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentResponse'
+        "422":
+          description: Error de negocio (El paquete ya está EN_TRANSITO y no se puede modificar).
+
+  # ==========================================
+  # ANALYTICS CONTEXT (Java / Spring Boot)
+  # ==========================================
+  /analytics/metrics/daily:
+    get:
+      summary: Obtener métricas acumuladas diarias
+      description: Retorna el volumen total de envíos y la tasa de cancelación de una fecha específica. Exclusivo para ADMIN.
+      tags:
+        - Analytics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: Fecha a consultar (ISO 8601 YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2026-06-25"
+      responses:
+        "200":
+          description: Datos métricos recuperados con éxito.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  totalVolume:
+                    type: integer
+                    example: 1450
+                  cancellationRate:
+                    type: number
+                    format: float
+                    example: 1.25
+        "403":
+          description: Prohibido. Rol insuficiente.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT autocontenido (Válido por 15 minutos).
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: Token de refresco opaco (Válido por 7 días).
+          example: "d3b07384d113edec49eaa6238ad5ff00"
+        role:
+          type: string
+          example: "DISPATCHER"
+
+    Address:
+      type: object
+      required:
+        - street
+        - city
+        - country
+      properties:
+        street:
+          type: string
+          example: "Av. de la Constitución 456"
+        city:
+          type: string
+          example: "Monterrey"
+        country:
+          type: string
+          example: "México"
+
+    CreateShipmentRequest:
+      type: object
+      required:
+        - customerId
+        - origin
+        - destination
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          example: "1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"
+        origin:
+          $ref: '#/components/schemas/Address'
+        destination:
+          $ref: '#/components/schemas/Address'
+
+    ShipmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b7e283b1-0988-4f1b-9d41-471017ef36bb"
+        currentStatus:
+          type: string
+          example: "CREADO"
+        customerId:
+          type: string
+          format: uuid
+          example: "1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"
+        driverId:
+          type: string
+          format: uuid
+          nullable: true
+          example: null
+        origin:
+          $ref: '#/components/schemas/Address'
+        destination:
+          $ref: '#/components/schemas/Address'
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-06-25T14:32:00Z"
