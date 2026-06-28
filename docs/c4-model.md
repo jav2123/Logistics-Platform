@@ -16,26 +16,26 @@ Sistemas:
 
 + Logistics Platform (Sistema Central): El sistema de software que engloba toda la lógica de autenticación, gestión de envíos y analítica.
 
-Nivel 2: Contenedores (Containers)
+## Nivel 2: Contenedores (Containers)
 
 Muestra las aplicaciones/servicios ejecutables y los almacenes de datos que componen el sistema, detallando tecnologías y protocolos de comunicación.
 
 ```
 [Customer/Driver/Dispatcher/Admin]
                │
-       (HTTP / HTTPS)
+        (HTTP / HTTPS)
                ▼
-       [API Gateway] 
+        [API Gateway] 
                │
         ┌──────┴──────────────────────────┐
-  (HTTP)│                           (HTTP)│
+  (HTTP)│                                 │(HTTP)
         ▼                                 ▼
 [Auth Service] (.NET)             [Shipment Service] (Scala)
   │                                       │
   ├─(SQL)─► [PostgreSQL (Auth DB)]        ├─(SQL)─► [PostgreSQL (Shipment DB)]
   │                                       │
   ▼                                       ▼
-[Redis (Blacklist/Tokens)]         (AMQP)─► [RabbitMQ]
+[Redis (Blacklist JWT)]            (AMQP)─► [RabbitMQ]
                                               │
                                         (AMQP)│
                                               ▼
@@ -45,7 +45,7 @@ Muestra las aplicaciones/servicios ejecutables y los almacenes de datos que comp
 ```
 + API Gateway: Punto de entrada único para los clientes. Encargado del ruteo inverso y de validar de forma perimetral el JWT en las peticiones entrantes.
 
-+ Auth Service (.NET): Gestiona identidades, emite/refresca tokens JWT y maneja la lista de revocación. (Usa PostgreSQL para credenciales y Redis para Refresh Tokens/Blacklist).
++ Auth Service (.NET): Gestiona identidades, emite/refresca tokens y maneja la lista de revocación. Usa PostgreSQL para credenciales y el ciclo de vida del refresh_token, y Redis exclusivamente como Blacklist de JWTs inválidos de forma perimetral..
 
 + Shipment Service (Scala): Núcleo del negocio. Gestiona la creación de órdenes, asignación de rutas y auditoría del ciclo de vida del paquete. (Usa PostgreSQL para persistencia transaccional).
 
@@ -53,7 +53,7 @@ Muestra las aplicaciones/servicios ejecutables y los almacenes de datos que comp
 
 + RabbitMQ: Message Broker que actúa como el tejido de comunicación asíncrona (Pub/Sub) entre los servicios mediante un Topic Exchange.
 
-Nivel 3: Componentes (Components)
+## Nivel 3: Componentes (Components)
 
 Desglose interno de los contenedores clave para entender su arquitectura de software (enfocado en controladores, servicios y repositorios).
 Componentes de Auth Service (.NET)
