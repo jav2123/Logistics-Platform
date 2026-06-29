@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # Base de Datos Relacional Unificada para los 3 Microservicios
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: logistics-postgres
+    environment:
+      POSTGRES_USER: logistics_user
+      POSTGRES_PASSWORD: logistics_password
+      # Nota: Por defecto crea la DB inicial. Para desarrollo puedes conectarte 
+      # y crear manualmente las tres DBs independientes: auth_db, shipment_db y analytics_db.
+      POSTGRES_DB: auth_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - logistics-network
+
+  # Caché para la Blacklist de JWTs (Utilizado por el Auth Service)
+  redis-cache:
+    image: redis:7-alpine
+    container_name: logistics-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - logistics-network
+
+  # Message Broker para la comunicación asíncrona (Pub/Sub)
+  rabbitmq-broker:
+    image: rabbitmq:3-management-alpine
+    container_name: logistics-rabbitmq
+    ports:
+      - "5672:5672"   # Puerto AMQP para envío y recepción de mensajes
+      - "15672:15672" # Puerto de la interfaz Web de Administración
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - logistics-network
+
+  # API Gateway - Punto de Entrada Único y Proxy Inverso
+  api-gateway:
+    image: nginx:alpine
+    container_name: logistics-nginx
+    ports:
+      - "80:80"       # Tu backend responderá en http://localhost/
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - postgres-db
+      - rabbitmq-broker
+    networks:
+      - logistics-network
+
+volumes:
+  postgres_data:
+
+networks:
+  logistics-network:
+    driver: bridge
