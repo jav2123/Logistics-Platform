@@ -43,7 +43,7 @@ Muestra las aplicaciones/servicios ejecutables y los almacenes de datos que comp
                                               │
                                               └─(SQL)─► [PostgreSQL (Analytics DB)]
 ```
-+ API Gateway: Punto de entrada único para los clientes. Encargado del ruteo inverso y de validar de forma perimetral el JWT en las peticiones entrantes.
++ API Gateway(NGINX): Punto de entrada único para los clientes. Encargado del ruteo inverso (redirección de tráfico) hacia los microservicios correspondientes basándose en la ruta de la URL. La validación del JWT se delega de forma distribuida a cada microservicio.
 
 + Auth Service (.NET): Gestiona identidades, emite/refresca tokens y maneja la lista de revocación. Usa PostgreSQL para credenciales y el ciclo de vida del refresh_token, y Redis exclusivamente como Blacklist de JWTs inválidos de forma perimetral..
 
