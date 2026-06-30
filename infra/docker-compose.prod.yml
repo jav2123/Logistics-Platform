@@ -5,16 +5,14 @@ services:
     image: postgres:15-alpine
     container_name: logistics-postgres-prod
     environment:
-      POSTGRES_USER: logistics_user
-      POSTGRES_PASSWORD: logistics_password
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: auth_db
-    # En producción real no solemos exponer el puerto 5432 al mundo exterior, 
-    # pero para tus pruebas locales de prod lo podemos dejar.
     ports:
       - "5432:5432" 
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # <-- Crucial también aquí
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - logistics-network
 
@@ -28,8 +26,8 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: logistics-rabbitmq-prod
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     networks:
       - logistics-network
 
@@ -38,7 +36,7 @@ services:
       context: ./../auth-service/src
       dockerfile: Dockerfile
     environment:
-      - ConnectionStrings__DefaultConnection=Host=postgres-db;Database=auth_db;Username=logistics_user;Password=logistics_password
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Database=auth_db;Username=${DB_USER};Password=${DB_PASSWORD}
       - Redis__Host=redis-cache
     depends_on:
       - postgres-db
@@ -62,7 +60,6 @@ services:
   analytics-service:
     build:
       context: ./../analytics-service
-      dockerfile: Dockerfile
     environment: 
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/analytics_db
       - SPRING_RABBITMQ_HOST=rabbitmq-broker
@@ -73,14 +70,13 @@ services:
     networks:
       - logistics-network
 
-  # API Gateway apuntando internamente a los contenedores
   api-gateway:
     image: nginx:alpine
     container_name: logistics-nginx-prod
     ports:
       - "80:80"
     volumes:
-      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro # Configuración de Producción
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro 
     depends_on:
       - auth-service
       - shipment-service
@@ -89,7 +85,7 @@ services:
       - logistics-network
 
 volumes:
-  postgres_prod_data: # Volumen separado para no mezclar datos de pruebas con desarrollo
+  postgres_prod_data: 
 
 networks:
   logistics-network:
