@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: logistics-postgres-prod
+    environment:
+      POSTGRES_USER: logistics_user
+      POSTGRES_PASSWORD: logistics_password
+      POSTGRES_DB: auth_db
+    # En producción real no solemos exponer el puerto 5432 al mundo exterior, 
+    # pero para tus pruebas locales de prod lo podemos dejar.
+    ports:
+      - "5432:5432" 
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # <-- Crucial también aquí
+    networks:
+      - logistics-network
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: logistics-redis-prod
+    networks:
+      - logistics-network
+
+  rabbitmq-broker:
+    image: rabbitmq:3-management-alpine
+    container_name: logistics-rabbitmq-prod
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - logistics-network
+
+  auth-service:
+    build:
+      context: ./../auth-service/src
+      dockerfile: Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres-db;Database=auth_db;Username=logistics_user;Password=logistics_password
+      - Redis__Host=redis-cache
+    depends_on:
+      - postgres-db
+      - redis-cache
+    networks:
+      - logistics-network
+
+  shipment-service:
+    build:
+      context: ./../shipment-service/src/shipment-service
+      dockerfile: Dockerfile
+    environment:
+      - DB_URL=jdbc:postgresql://postgres-db:5432/shipment_db
+      - RABBITMQ_HOST=rabbitmq-broker
+    depends_on:
+      - postgres-db
+      - rabbitmq-broker
+    networks:
+      - logistics-network
+
+  analytics-service:
+    build:
+      context: ./../analytics-service
+      dockerfile: Dockerfile
+    environment: 
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/analytics_db
+      - SPRING_RABBITMQ_HOST=rabbitmq-broker
+      - SERVER_PORT=8081
+    depends_on:
+      - postgres-db
+      - rabbitmq-broker
+    networks:
+      - logistics-network
+
+  # API Gateway apuntando internamente a los contenedores
+  api-gateway:
+    image: nginx:alpine
+    container_name: logistics-nginx-prod
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro # Configuración de Producción
+    depends_on:
+      - auth-service
+      - shipment-service
+      - analytics-service
+    networks:
+      - logistics-network
+
+volumes:
+  postgres_prod_data: # Volumen separado para no mezclar datos de pruebas con desarrollo
+
+networks:
+  logistics-network:
+    driver: bridge

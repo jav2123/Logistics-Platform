@@ -1,0 +1,43 @@
+## ==========================================
+## .NET 9 Core - Auth Service Configuration
+## ==========================================
+
+# Archivos de compilación, temporales y binarios
+bin/
+obj/
+out/
+publish/
+
+# Datos de rendimiento y perfiles de ejecución
+*.user
+*.userosscache
+*.sln.docstates
+
+# Caché de herramientas de .NET y herramientas de diagnóstico
+.dotnet/
+.failed-tests/
+*.Visual Studio.bak
+
+## ==========================================
+## Editores e IDEs (Visual Studio, Rider, VS Code)
+## ==========================================
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.opened
+*.workspace
+
+## ==========================================
+## Secretos y Configuración de Producción
+## ==========================================
+# ¡NUNCA subir configuraciones de producción ni secretos locales!
+secrets.json
+appsettings.Production.json
+
+# Archivos de entorno específicos del contenedor si los usas aquí adentro
+.env
+.env.*
